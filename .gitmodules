@@ -1,0 +1,3 @@
+[submodule "aes-stream"]
+	path = aes-stream
+	url = https://github.com/jedisct1/aes-stream.git
