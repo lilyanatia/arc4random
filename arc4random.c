@@ -1,5 +1,6 @@
 #include <cpuid.h>
 #include <limits.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <sys/random.h>
 
@@ -7,14 +8,19 @@
 #include "aes-stream/src/aes-stream.h"
 #endif
 
-uint32_t arc4random(void)
+#define KEYSTREAM_ONLY
+#include "chacha_private.h"
+#define KEYSZ 32
+#define IVSZ 8
+
+__attribute__((visibility("default"))) uint32_t arc4random(void)
 {
   uint32_t out;
   while(getrandom(&out, sizeof(out), 0) < sizeof(out));
   return out;
 }
 
-void arc4random_buf(void *buf, size_t nbytes)
+__attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nbytes)
 {
 #if defined(__AES__)
   unsigned char seed[AES_STREAM_SEEDBYTES];
@@ -35,18 +41,23 @@ void arc4random_buf(void *buf, size_t nbytes)
     else
 #endif
     {
-      for(size_t length = 0; nbytes;)
+      unsigned char rnd[KEYSZ + IVSZ];
+      chacha_ctx ctx;
+      while(getrandom(rnd, KEYSZ + IVSZ, 0) < KEYSZ + IVSZ);
+      chacha_keysetup(&ctx, buf, KEYSZ * 8, 0);
+      chacha_ivsetup(&ctx, buf + KEYSZ);
+      while(nbytes)
       {
-        length = getrandom(buf, nbytes > SIZE_MAX ? SIZE_MAX : nbytes, 0);
-        if(length < 0) length = 0;
-        buf += length;
-        nbytes -= length;
+        chacha_encrypt_bytes(&ctx, buf, buf, nbytes > UINT32_MAX ? UINT32_MAX : nbytes);
+        buf += nbytes > UINT32_MAX ? UINT32_MAX : nbytes;
+        nbytes -= nbytes > UINT32_MAX ? UINT32_MAX : nbytes;
       }
     }
   }
 }
 
-uint32_t arc4random_uniform(uint32_t upper_bound)
+__attribute__((visibility("default"))) uint32_t arc4random_uniform(uint32_t upper_bound)
+ 
 {
   #define LENGTH 256
   const uint32_t limit = upper_bound < UINT32_MAX >> 1 ? UINT32_MAX - UINT32_MAX % upper_bound : upper_bound;
