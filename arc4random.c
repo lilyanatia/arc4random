@@ -2,6 +2,7 @@
 #include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 #include <sys/random.h>
 
 #if defined(__AES__)
@@ -22,10 +23,6 @@ __attribute__((visibility("default"))) uint32_t arc4random(void)
 
 __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nbytes)
 {
-#if defined(__AES__)
-  unsigned char seed[AES_STREAM_SEEDBYTES];
-  aes_stream_state st;
-#endif
   if(nbytes <= 256) while(getrandom(buf, nbytes, 0) < nbytes);
   else
   {
@@ -34,6 +31,8 @@ __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nby
     __get_cpuid(1, &eax, &ebx, &ecx, &edx);
     if(ecx & bit_AES)
     {
+      unsigned char seed[AES_STREAM_SEEDBYTES];
+      aes_stream_state st;
       while(getrandom(seed, AES_STREAM_SEEDBYTES, 0) < AES_STREAM_SEEDBYTES);
       aes_stream_init(&st, seed);
       aes_stream(&st, buf, nbytes);
@@ -44,13 +43,14 @@ __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nby
       unsigned char rnd[KEYSZ + IVSZ];
       chacha_ctx ctx;
       while(getrandom(rnd, KEYSZ + IVSZ, 0) < KEYSZ + IVSZ);
-      chacha_keysetup(&ctx, buf, KEYSZ * 8, 0);
-      chacha_ivsetup(&ctx, buf + KEYSZ);
       while(nbytes)
       {
-        chacha_encrypt_bytes(&ctx, buf, buf, nbytes > UINT32_MAX ? UINT32_MAX : nbytes);
-        buf += nbytes > UINT32_MAX ? UINT32_MAX : nbytes;
-        nbytes -= nbytes > UINT32_MAX ? UINT32_MAX : nbytes;
+        chacha_keysetup(&ctx, rnd, KEYSZ * 8, 0);
+        chacha_ivsetup(&ctx, rnd + KEYSZ);
+        chacha_encrypt_bytes(&ctx, rnd, rnd, KEYSZ + IVSZ);
+        chacha_encrypt_bytes(&ctx, buf, buf, nbytes > 0x1000000 ? 0x1000000 : nbytes);
+        buf += nbytes > 0x1000000 ? 0x1000000 : nbytes;
+        nbytes -= nbytes > 0x1000000 ? 0x1000000 : nbytes;
       }
     }
   }
