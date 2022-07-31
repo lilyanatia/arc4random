@@ -7,8 +7,8 @@ PREFIX ?= /usr
 LIB_PATH := $(PREFIX)/lib
 HEADER_PATH := $(PREFIX)/include
 
-CFLAGS += -fPIC
-LDFLAGS += -shared -fvisibility=hidden
+CFLAGS += -fPIC -fvisibility=hidden
+LDFLAGS += -shared
 
 TARGET := libarc4random.so
 OBJECTS := arc4random.o
