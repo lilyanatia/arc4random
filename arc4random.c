@@ -1,8 +1,6 @@
-#include <cpuid.h>
 #include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
 #include <sys/random.h>
 
 #define KEYSTREAM_ONLY
