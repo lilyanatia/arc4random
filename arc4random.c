@@ -24,11 +24,11 @@ __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nby
   else
   {
     unsigned char rnd[KEYSZ + IVSZ];
-    size_t length;
     chacha_ctx ctx;
     while(getrandom(rnd, KEYSZ + IVSZ, 0) < KEYSZ + IVSZ);
     while(nbytes)
     {
+      size_t length;
       chacha_keysetup(&ctx, rnd, KEYSZ * 8, 0);
       chacha_ivsetup(&ctx, rnd + KEYSZ);
       chacha_encrypt_bytes(&ctx, rnd, rnd, KEYSZ + IVSZ);
