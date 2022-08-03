@@ -6,11 +6,6 @@
 #define GETRANDOM_SIZE 256
 #define REKEY_INTERVAL 0x1000000
 
-#define KEYSTREAM_ONLY
-#include "chacha_private.h"
-#define KEYSZ 32
-#define IVSZ 8
-
 __attribute__((visibility("default"))) uint32_t arc4random(void)
 {
   uint32_t out;
@@ -20,23 +15,7 @@ __attribute__((visibility("default"))) uint32_t arc4random(void)
 
 __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nbytes)
 {
-  if(nbytes <= GETRANDOM_SIZE) while(getrandom(buf, nbytes, 0) < nbytes);
-  else
-  {
-    unsigned char rnd[KEYSZ + IVSZ];
-    chacha_ctx ctx;
-    while(getrandom(rnd, KEYSZ + IVSZ, 0) < KEYSZ + IVSZ);
-    while(nbytes)
-    {
-      size_t length;
-      chacha_keysetup(&ctx, rnd, KEYSZ * 8, 0);
-      chacha_ivsetup(&ctx, rnd + KEYSZ);
-      chacha_encrypt_bytes(&ctx, rnd, rnd, KEYSZ + IVSZ);
-      chacha_encrypt_bytes(&ctx, buf, buf, length = nbytes > REKEY_INTERVAL ? REKEY_INTERVAL : nbytes);
-      buf += length;
-      nbytes -= length;
-    }
-  }
+  for(ssize_t length = 0; nbytes; length = getrandom(buf += length, nbytes -= length, 0));
 }
 
 __attribute__((visibility("default"))) uint32_t arc4random_uniform(uint32_t upper_bound)
