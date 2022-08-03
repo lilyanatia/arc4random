@@ -54,13 +54,9 @@ __attribute__((visibility("default"))) uint32_t arc4random_uniform(uint32_t uppe
 
 __attribute__((visibility("default"))) double arc4random_double(void)
 {
-  struct
-  {
-    double out;
-    uint64_t extra[(int)ceil(DBL_ALT_EXP / 64.0)];
-  } random;
-  arc4random_buf(&random, sizeof(random));
-  uint64_t *const p = (uint64_t *)&random.out;
+  double out;
+  arc4random_buf(&out, sizeof(out));
+  uint64_t *const p = (uint64_t *)&out;
   uint32_t r = *p >> DBL_MANT_BITS;
   if(r)
   {
@@ -69,15 +65,18 @@ __attribute__((visibility("default"))) double arc4random_double(void)
   }
   else
   {
+    uint64_t extra;
     *p |= DBL_ALT_EXP << DBL_MANT_BITS;
-    for(int i = DBL_ALT_EXP / 64; i; --i)
+    for(int i = DBL_ALT_EXP / (CHAR_BIT * sizeof(extra)); i; --i)
     {
-      if(r = random.extra[i]) goto done;
-      *p -= 64ul << DBL_MANT_BITS;
+      arc4random_buf(&extra, sizeof(extra));
+      if(r = extra) goto done;
+      *p -= (CHAR_BIT * sizeof(extra)) << DBL_MANT_BITS;
     }
-    r = random.extra[0] | 1ul << (DBL_ALT_EXP % 64);
+    arc4random_buf(&extra, sizeof(extra));
+    r = extra | 1ul << (DBL_ALT_EXP % 64);
   }
   done:
   *p -= ctz64(r) << DBL_MANT_BITS;
-  return random.out;
+  return out;
 }
