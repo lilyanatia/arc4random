@@ -1,7 +1,6 @@
 #include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <sys/param.h>
 #include <sys/random.h>
 
 #define GETRANDOM_SIZE 256
@@ -16,7 +15,12 @@ __attribute__((visibility("default"))) uint32_t arc4random(void)
 
 __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nbytes)
 {
-  for(ssize_t length = 0; nbytes; length = MAX(0, getrandom(buf += length, MIN(nbytes -= length, SSIZE_MAX), 0)));
+  while(nbytes)
+  { ssize_t length = getrandom(buf, nbytes, 0);
+    if(length < 0) length = 0;
+    buf += length;
+    nbytes -= length;
+  }
 }
 
 __attribute__((visibility("default"))) uint32_t arc4random_uniform(uint32_t upper_bound)
@@ -30,4 +34,42 @@ __attribute__((visibility("default"))) uint32_t arc4random_uniform(uint32_t uppe
     for(int i = 0; i < GETRANDOM_SIZE / sizeof(uint32_t); ++i)
       if(out[i] < limit) return limit == upper_bound ? out[i] : out[i] % upper_bound;
   }
+}
+
+#include <float.h>
+#include <math.h>
+
+#define DBL_EXP_DIG (sizeof(double) * CHAR_BIT - DBL_MANT_DIG)
+#define DBL_MANT_BITS (DBL_MANT_DIG - 1)               // 52
+#define DBL_BASE_EXP  (DBL_MAX_EXP  - 2ul)             // 1022
+#define DBL_ALT_EXP   (DBL_BASE_EXP - DBL_EXP_DIG - 1) // 1010
+
+__attribute__((visibility("default"))) double arc4random_double(void)
+{
+  struct
+  {
+    double out;
+    uint64_t extra[(int)ceil(DBL_ALT_EXP / 64.0)];
+  } random;
+  arc4random_buf(&random, sizeof(random));
+  uint64_t *const p = (uint64_t *)&random.out;
+  uint32_t r = *p >> DBL_MANT_BITS;
+  if(r)
+  {
+    *p &= (1ul << DBL_MANT_BITS) - 1;
+    *p |= DBL_BASE_EXP << DBL_MANT_BITS;
+  }
+  else
+  {
+    *p |= DBL_ALT_EXP << DBL_MANT_BITS;
+    for(int i = DBL_ALT_EXP / 64; i; --i)
+    {
+      if(r = random.extra[i]) goto done;
+      *p -= 64ul << DBL_MANT_BITS;
+    }
+    r = random.extra[0] | 1ul << (DBL_ALT_EXP % 64);
+  }
+  done:
+  *p -= (uint64_t)__builtin_ctzl(r) << DBL_MANT_BITS;
+  return random.out;
 }
