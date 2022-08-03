@@ -1,6 +1,7 @@
 #include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <sys/param.h>
 #include <sys/random.h>
 
 #define GETRANDOM_SIZE 256
@@ -15,7 +16,7 @@ __attribute__((visibility("default"))) uint32_t arc4random(void)
 
 __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nbytes)
 {
-  for(ssize_t length = 0; nbytes; length = getrandom(buf += length, nbytes -= length, 0));
+  for(ssize_t length = 0; nbytes; length = MAX(0, getrandom(buf += length, MIN(nbytes -= length, SSIZE_MAX), 0)));
 }
 
 __attribute__((visibility("default"))) uint32_t arc4random_uniform(uint32_t upper_bound)
