@@ -44,6 +44,14 @@ __attribute__((visibility("default"))) uint32_t arc4random_uniform(uint32_t uppe
 #define DBL_BASE_EXP  (DBL_MAX_EXP  - 2ul)             // 1022
 #define DBL_ALT_EXP   (DBL_BASE_EXP - DBL_EXP_DIG - 1) // 1010
 
+#if(UINT_MAX >= UINT64_MAX)
+#define ctz64(n) (uint64_t)__builtin_ctz(n)
+#elif(ULONG_MAX >= UINT64_MAX)
+#define ctz64(n) (uint64_t)__builtin_ctzl(n)
+#else
+#define ctz64(n) (uint64_t)__builtin_ctzll(n)
+#endif
+
 __attribute__((visibility("default"))) double arc4random_double(void)
 {
   struct
@@ -70,6 +78,6 @@ __attribute__((visibility("default"))) double arc4random_double(void)
     r = random.extra[0] | 1ul << (DBL_ALT_EXP % 64);
   }
   done:
-  *p -= (uint64_t)__builtin_ctzl(r) << DBL_MANT_BITS;
+  *p -= ctz64(r) << DBL_MANT_BITS;
   return random.out;
 }
