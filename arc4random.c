@@ -3,8 +3,8 @@
 #include <stdint.h>
 #include <sys/random.h>
 
-#define unlikely(x) __builtin_expect(x, 0)
-#define likely(x) !__builtin_expect(!(x), 0)
+#define unlikely(x) __builtin_expect(!!(x), 0)
+#define likely(x)   __builtin_expect(!!(x), 1)
 
 __attribute__((visibility("default"))) uint32_t arc4random(void)
 {
