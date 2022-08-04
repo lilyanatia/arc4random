@@ -72,7 +72,7 @@ __attribute__((visibility("default"))) double arc4random_double(void)
       *p -= (CHAR_BIT * sizeof(extra)) << DBL_MANT_BITS;
     }
     arc4random_buf(&extra, sizeof(extra));
-    r = extra | 1ul << (DBL_ALT_EXP % 64);
+    r = extra | 1ul << (DBL_ALT_EXP % (CHAR_BIT * sizeof(extra)));
   }
   done:
   *p -= ctz64(r) << DBL_MANT_BITS;
