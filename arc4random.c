@@ -15,12 +15,14 @@ __attribute__((visibility("default"))) uint32_t arc4random(void)
 
 __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nbytes)
 {
-  while(nbytes)
-  { ssize_t length = getrandom(buf, nbytes, 0);
+  if(likely(nbytes)) do
+  {
+    ssize_t length = getrandom(buf, nbytes, 0);
     if(unlikely(length < 0)) length = 0;
     buf += length;
     nbytes -= length;
   }
+  while(unlikely(nbytes));
 }
 
 __attribute__((visibility("default"))) uint32_t arc4random_uniform(uint32_t upper_bound)
@@ -29,7 +31,7 @@ __attribute__((visibility("default"))) uint32_t arc4random_uniform(uint32_t uppe
   uint32_t out, limit = UINT32_MAX - UINT32_MAX % upper_bound;
   for(;;)
   {
-    while(unlikely(getrandom(&out, sizeof(out), 0) < sizeof(out)) || out >= limit);
+    while(unlikely(getrandom(&out, sizeof(out), 0) < sizeof(out)) || unlikely(out >= limit));
     return out % upper_bound;
   }
 }
@@ -60,16 +62,14 @@ __attribute__((visibility("default"))) double arc4random_double(void)
   if(unlikely(!r))
   {
     uint64_t extra;
-    for(int i = DBL_ALT_EXP / (CHAR_BIT * sizeof(extra)); i; --i)
+    for(int i = DBL_ALT_EXP / (CHAR_BIT * sizeof(extra)) + 1; i; --i)
     {
       arc4random_buf(&extra, sizeof(extra));
-      if(likely(r = extra)) goto done;
-      *p -= (CHAR_BIT * sizeof(extra)) << DBL_MANT_BITS;
+      if(likely(r = extra)) break;
+      else *p -= (CHAR_BIT * sizeof(extra)) << DBL_MANT_BITS;
+      r |= 1ul << (DBL_ALT_EXP % (CHAR_BIT * sizeof(extra)));
     }
-    arc4random_buf(&extra, sizeof(extra));
-    r = extra | 1ul << (DBL_ALT_EXP % (CHAR_BIT * sizeof(extra)));
   }
-  done:
   *p -= ctz64(r) << DBL_MANT_BITS;
   return out;
 }
