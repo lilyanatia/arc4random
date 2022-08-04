@@ -3,9 +3,6 @@
 #include <stdint.h>
 #include <sys/random.h>
 
-#define GETRANDOM_SIZE 256
-#define REKEY_INTERVAL 0x1000000
-
 __attribute__((visibility("default"))) uint32_t arc4random(void)
 {
   uint32_t out;
