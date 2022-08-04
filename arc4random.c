@@ -51,29 +51,6 @@ __attribute__((visibility("default"))) uint32_t arc4random_uniform(uint32_t uppe
 #define DBL_BASE_EXP  (DBL_MAX_EXP  - UINT64_C(1))     // 1022
 #define DBL_ALT_EXP   (DBL_BASE_EXP - DBL_EXP_DIG - 1) // 1010
 
-__attribute__((visibility("default"))) double arc4random_double(void)
-{
-  double out;
-  arc4random_buf(&out, sizeof(out));
-  uint64_t *const p = (uint64_t *)&out;
-  uint64_t r = *p >> DBL_MANT_BITS;
-  *p &= (UINT64_C(1) << DBL_MANT_BITS) - 1;
-  *p |= DBL_BASE_EXP << DBL_MANT_BITS;
-  if(unlikely(!r))
-  {
-    uint64_t extra;
-    for(int i = DBL_ALT_EXP / (CHAR_BIT * sizeof(extra)) + 1; i; --i)
-    {
-      arc4random_buf(&extra, sizeof(extra));
-      if(likely(r = extra)) break;
-      else *p -= (CHAR_BIT * sizeof(extra)) << DBL_MANT_BITS;
-      r |= UINT64_C(1) << (DBL_ALT_EXP % (CHAR_BIT * sizeof(extra)));
-    }
-  }
-  *p -= ctz64(r) << DBL_MANT_BITS;
-  return out;
-}
-
 __attribute__((visibility("default"))) void arc4random_double_buf(double *buf, size_t length)
 {
   arc4random_buf(buf, length * sizeof(double));
@@ -96,6 +73,13 @@ __attribute__((visibility("default"))) void arc4random_double_buf(double *buf, s
     }
     *p -= ctz64(r) << DBL_MANT_BITS;
   }
+}
+
+__attribute__((visibility("default"))) double arc4random_double(void)
+{
+  double out;
+  arc4random_double_buf(&out, 1);
+  return out;
 }
 
 #define FLT_EXP_DIG (sizeof(float) * CHAR_BIT - FLT_MANT_DIG)
