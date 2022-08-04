@@ -3,10 +3,13 @@
 #include <stdint.h>
 #include <sys/random.h>
 
+#define unlikely(x) __builtin_expect(x, 0)
+#define likely(x) !__builtin_expect(!(x), 0)
+
 __attribute__((visibility("default"))) uint32_t arc4random(void)
 {
   uint32_t out;
-  while(__builtin_expect(getrandom(&out, sizeof(out), 0) < sizeof(out), 0));
+  while(unlikely(getrandom(&out, sizeof(out), 0) < sizeof(out)));
   return out;
 }
 
@@ -14,7 +17,7 @@ __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nby
 {
   while(nbytes)
   { ssize_t length = getrandom(buf, nbytes, 0);
-    if(__builtin_expect(length < 0, 0)) length = 0;
+    if(unlikely(length < 0)) length = 0;
     buf += length;
     nbytes -= length;
   }
@@ -26,7 +29,7 @@ __attribute__((visibility("default"))) uint32_t arc4random_uniform(uint32_t uppe
   uint32_t out, limit = UINT32_MAX - UINT32_MAX % upper_bound;
   for(;;)
   {
-    while(__builtin_expect(getrandom(&out, sizeof(out), 0) < sizeof(out), 0) || out >= limit);
+    while(unlikely(getrandom(&out, sizeof(out), 0) < sizeof(out)) || out >= limit);
     return out % upper_bound;
   }
 }
@@ -54,13 +57,13 @@ __attribute__((visibility("default"))) double arc4random_double(void)
   uint64_t r = *p >> DBL_MANT_BITS;
   *p &= (1ul << DBL_MANT_BITS) - 1;
   *p |= DBL_BASE_EXP << DBL_MANT_BITS;
-  if(__builtin_expect(!r, 0))
+  if(unlikely(!r))
   {
     uint64_t extra;
     for(int i = DBL_ALT_EXP / (CHAR_BIT * sizeof(extra)); i; --i)
     {
       arc4random_buf(&extra, sizeof(extra));
-      if(!__builtin_expect(!(r = extra), 0)) goto done;
+      if(likely(r = extra)) goto done;
       *p -= (CHAR_BIT * sizeof(extra)) << DBL_MANT_BITS;
     }
     arc4random_buf(&extra, sizeof(extra));
