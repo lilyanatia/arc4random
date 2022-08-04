@@ -20,9 +20,8 @@ __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nby
   {
     ssize_t length = MAX(0, getrandom(buf, nbytes, 0));
     buf += length;
-    nbytes -= length;
   }
-  while(unlikely(nbytes));
+  while(unlikely(nbytes -= length));
 }
 
 __attribute__((visibility("default"))) uint32_t arc4random_uniform(uint32_t upper_bound)
