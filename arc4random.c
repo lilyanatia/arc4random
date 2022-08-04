@@ -1,6 +1,7 @@
 #include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <sys/param.h>
 #include <sys/random.h>
 
 #define unlikely(x) __builtin_expect(!!(x), 0)
@@ -17,8 +18,7 @@ __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nby
 {
   if(likely(nbytes)) do
   {
-    ssize_t length = getrandom(buf, nbytes, 0);
-    if(unlikely(length < 0)) length = 0;
+    ssize_t length = MAX(0, getrandom(buf, nbytes, 0));
     buf += length;
     nbytes -= length;
   }
@@ -29,11 +29,8 @@ __attribute__((visibility("default"))) uint32_t arc4random_uniform(uint32_t uppe
  
 {
   uint32_t out, limit = UINT32_MAX - UINT32_MAX % upper_bound;
-  for(;;)
-  {
-    while(unlikely(getrandom(&out, sizeof(out), 0) < sizeof(out)) || unlikely(out >= limit));
-    return out % upper_bound;
-  }
+  while(unlikely(getrandom(&out, sizeof(out), 0) < sizeof(out)) || unlikely(out >= limit));
+  return out % upper_bound;
 }
 
 #include <float.h>
@@ -73,13 +70,6 @@ __attribute__((visibility("default"))) void arc4random_double_buf(double *buf, s
     }
     *p -= ctz64(r) << DBL_MANT_BITS;
   }
-}
-
-__attribute__((visibility("default"))) double arc4random_double(void)
-{
-  double out;
-  arc4random_double_buf(&out, 1);
-  return out;
 }
 
 #define FLT_EXP_DIG (sizeof(float) * CHAR_BIT - FLT_MANT_DIG)
