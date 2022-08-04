@@ -28,8 +28,9 @@ __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nby
 __attribute__((visibility("default"))) uint32_t arc4random_uniform(uint32_t upper_bound)
  
 {
-  uint32_t out, limit = UINT32_MAX - UINT32_MAX % upper_bound;
-  while(unlikely(getrandom(&out, sizeof(out), 0) < sizeof(out)) || unlikely(out >= limit));
+  uint32_t out;
+  for(uint32_t const limit = ~(UINT32_MAX % upper_bound);
+      unlikely(getrandom(&out, sizeof(out), 0) < sizeof(out)) || unlikely(out >= limit););
   return out % upper_bound;
 }
 
