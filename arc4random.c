@@ -32,7 +32,6 @@ __attribute__((visibility("default"))) uint32_t arc4random_uniform(uint32_t uppe
 }
 
 #include <float.h>
-#include <math.h>
 
 #define DBL_EXP_DIG (sizeof(double) * CHAR_BIT - DBL_MANT_DIG)
 #define DBL_MANT_BITS (DBL_MANT_DIG - 1)               // 52
@@ -52,7 +51,7 @@ __attribute__((visibility("default"))) double arc4random_double(void)
   double out;
   arc4random_buf(&out, sizeof(out));
   uint64_t *const p = (uint64_t *)&out;
-  uint32_t r = *p >> DBL_MANT_BITS;
+  uint64_t r = *p >> DBL_MANT_BITS;
   *p &= (1ul << DBL_MANT_BITS) - 1;
   *p |= DBL_BASE_EXP << DBL_MANT_BITS;
   if(!r)
