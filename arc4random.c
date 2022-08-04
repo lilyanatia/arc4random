@@ -53,15 +53,11 @@ __attribute__((visibility("default"))) double arc4random_double(void)
   arc4random_buf(&out, sizeof(out));
   uint64_t *const p = (uint64_t *)&out;
   uint32_t r = *p >> DBL_MANT_BITS;
-  if(r)
-  {
-    *p &= (1ul << DBL_MANT_BITS) - 1;
-    *p |= DBL_BASE_EXP << DBL_MANT_BITS;
-  }
-  else
+  *p &= (1ul << DBL_MANT_BITS) - 1;
+  *p |= DBL_BASE_EXP << DBL_MANT_BITS;
+  if(!r)
   {
     uint64_t extra;
-    *p |= DBL_ALT_EXP << DBL_MANT_BITS;
     for(int i = DBL_ALT_EXP / (CHAR_BIT * sizeof(extra)); i; --i)
     {
       arc4random_buf(&extra, sizeof(extra));
