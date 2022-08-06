@@ -22,7 +22,7 @@ __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nby
 {
   if(likely(nbytes)) do
   {
-    ssize_t length = MAX(0, getrandom(buf, nbytes, 0));
+    ssize_t length = MAX(0, getrandom(buf, MIN(SSIZE_MAX, nbytes), 0));
     buf += length;
     nbytes -= length;
   }
