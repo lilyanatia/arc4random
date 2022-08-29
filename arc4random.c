@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <sys/param.h>
 #include <sys/random.h>
+#include <sys/types.h>
 
 #if !defined(__GNUC__) || __GNUC__ < 3
 #define __builtin_expect(x, v) (x)
