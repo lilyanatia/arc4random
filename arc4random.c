@@ -10,6 +10,8 @@
 #include <wincrypt.h>
 #elif defined(USE_URANDOM)
 #include <stdio.h>
+#elif defined(NO_GETRANDOM_WRAPPER)
+#include <sys/syscall.h>
 #else
 #include <sys/random.h>
 #endif
@@ -22,7 +24,12 @@
 #define unlikely(x) __builtin_expect(!!(x), 0)
 #define likely(x)   __builtin_expect(!!(x), 1)
 
-#if defined(USE_GETENTROPY)
+#if defined(NO_GETRANDOM_WRAPPER)
+static inline ssize_t getrandom(void *buf, size_t buflen, unsigned int flags)
+{
+  return syscall(SYS_getrandom, buf, buflen, flags);
+}
+#elif defined(USE_GETENTROPY)
 static inline ssize_t getrandom(void *buf, size_t buflen, unsigned int flags)
 {
   if(buflen > 256) buflen = 256;
