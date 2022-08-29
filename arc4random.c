@@ -12,12 +12,7 @@
 #define unlikely(x) __builtin_expect(!!(x), 0)
 #define likely(x)   __builtin_expect(!!(x), 1)
 
-__attribute__((visibility("default"))) uint32_t arc4random(void)
-{
-  uint32_t out;
-  while(unlikely(getrandom(&out, sizeof(out), 0) < sizeof(out)));
-  return out;
-}
+#define GETRANDOM(r) while(unlikely(getrandom(&r, sizeof(r), 0) < 0))
 
 __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nbytes)
 {
@@ -30,11 +25,19 @@ __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nby
   while(unlikely(nbytes));
 }
 
+__attribute__((visibility("default"))) uint32_t arc4random(void)
+{
+  uint32_t out;
+  GETRANDOM(out)
+  return out;
+}
+
 __attribute__((visibility("default"))) uint32_t arc4random_uniform(uint32_t upper_bound)
  
 {
   uint32_t out;
-  for(uint32_t const limit = ~(UINT32_MAX % upper_bound);
-      unlikely(getrandom(&out, sizeof(out), 0) < sizeof(out)) || unlikely(out >= limit););
+  uint32_t const limit = ~(UINT32_MAX % upper_bound);
+  do GETRANDOM(out);
+  while(unlikely(out > limit));
   return out % upper_bound;
 }
