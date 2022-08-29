@@ -2,18 +2,11 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/param.h>
-#if defined(USE_GETENTROPY)
-#include <unistd.h>
-#elif defined(USE_BCRYPTGENRANDOM)
+#ifdef _MSC_VER
 #include <bcrypt.h>
-#elif defined(USE_CRYPTGENRANDOM)
-#include <wincrypt.h>
-#elif defined(USE_URANDOM)
-#include <stdio.h>
-#elif defined(NO_GETRANDOM_WRAPPER)
-#include <sys/syscall.h>
 #else
-#include <sys/random.h>
+#include <sys/syscall.h>
+#include <stdio.h>
 #endif
 #include <sys/types.h>
 
@@ -24,38 +17,27 @@
 #define unlikely(x) __builtin_expect(!!(x), 0)
 #define likely(x)   __builtin_expect(!!(x), 1)
 
-#if defined(NO_GETRANDOM_WRAPPER)
-static inline ssize_t getrandom(void *buf, size_t buflen, unsigned int flags)
-{
-  return syscall(SYS_getrandom, buf, buflen, flags);
-}
-#elif defined(USE_GETENTROPY)
-static inline ssize_t getrandom(void *buf, size_t buflen, unsigned int flags)
-{
-  if(buflen > 256) buflen = 256;
-  return getentropy(buf, buflen) || buflen;
-}
-#elif defined(USE_BCRYPTGENRANDOM)
+#ifdef _MSC_VER
 static inline ssize_t getrandom(void *buf, size_t buflen, unsigned int flags)
 {
   return likely(BcryptGenRandom(NULL, buf, buflen, BCRYPT_USE_SYSTEM_PREFERRED_RNG)) ?
          buflen : -1;
 }
-#elif defined(USE_CRYPTGENRANDOM)
+#else
 static inline ssize_t getrandom(void *buf, size_t buflen, unsigned int flags)
 {
-  HCRYPTPROV hCryptProv;
-  return likely(CryptAcquireContext(&hCryptProv, NULL, (LPCWSTR)L"Microsoft Base Cryptographic Provider v1.0", PROV_RSA_FULL, CRYPT_VERIFYCONTEXT) &&
-                CryptGenRandom(hCryptProv, buflen, buf)) ?
-         buflen : -1;
-}
-#elif defined(USE_URANDOM)
-static inline ssize_t getrandom(void *buf, size_t buflen, unsigned int flags)
-{
-  FILE *urandom = fopen("/dev/urandom", "r");
-  if(unlikely(!urandom)) return -1;
-  ssize_t length = fread(buf, 1, MIN(SSIZE_MAX, buflen), urandom);
-  fclose(urandom);
+  ssize_t length = syscall(SYS_getrandom, buf, buflen, flags);
+  if(unlikely(length < 0 && errno = ENOSYS))
+  {
+    length = syscall(SYS_getentropy(SYS_getentropy, buf, MIN(256, buflen))) || MIN(256, buflen);
+    if(unlikely(length < 0 && errno = ENOSYS))
+    {
+      FILE *urandom = fopen("/dev/urandom", "r");
+      if(unlikely(!urandom)) return -1;
+      ssize_t length = fread(buf, 1, MIN(SSIZE_MAX, buflen), urandom);
+      fclose(urandom);
+    }
+  }
   return length;
 }
 #endif
