@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <sys/param.h>
 #ifdef _MSC_VER
-#include <bcrypt.h>
+#include <wincrypt.h>
 #else
 #include <sys/syscall.h>
 #include <stdio.h>
@@ -17,30 +17,39 @@
 #define unlikely(x) __builtin_expect(!!(x), 0)
 #define likely(x)   __builtin_expect(!!(x), 1)
 
-#ifdef _MSC_VER
-static inline ssize_t getrandom(void *buf, size_t buflen, unsigned int flags)
-{
-  return likely(BcryptGenRandom(NULL, buf, buflen, BCRYPT_USE_SYSTEM_PREFERRED_RNG)) ?
-         buflen : -1;
-}
-#else
-static inline ssize_t getrandom(void *buf, size_t buflen, unsigned int flags)
-{
-  ssize_t length = syscall(SYS_getrandom, buf, buflen, flags);
-  if(unlikely(length < 0 && errno = ENOSYS))
-  {
-    length = syscall(SYS_getentropy(SYS_getentropy, buf, MIN(256, buflen))) || MIN(256, buflen);
-    if(unlikely(length < 0 && errno = ENOSYS))
-    {
-      FILE *urandom = fopen("/dev/urandom", "r");
-      if(unlikely(!urandom)) return -1;
-      ssize_t length = fread(buf, 1, MIN(SSIZE_MAX, buflen), urandom);
-      fclose(urandom);
-    }
-  }
-  return length;
-}
+#ifndef _MSC_VER
+static FILE *urandom;
 #endif
+
+static inline ssize_t getrandom(void *buf, size_t buflen, unsigned int flags)
+{
+  if(unlikely(buflen > SSIZE_MAX)) buflen = SSIZE_MAX;
+#if defined(_MSC_VER)
+  // Windows NT 4.0+
+  if(unlikely(buflen > UINT32_MAX)) buflen = UINT32_MAX;
+  HCRYPTPROV hCryptProv;
+  if(likely(CryptAcquireContext(&hCryptProv, NULL, (LPCWSTR)L"Microsoft Base Cryptographic Provider v1.0", PROV_RSA_FULL, CRYPT_VERIFYCONTEXT) &&
+            CryptGenRandom(hCryptProv, buflen, buf)))
+    return buflen;
+  else return -1;
+#else
+#if   defined(SYS_getrandom)
+  // Linux 3.17+ with glibc 2.25+ or musl 1.1.4+, FreeBSD 12+, NetBSD 10+, DragonFly 5.7+, Solaris 11.3+, Illumos
+  ssize_t length = syscall(SYS_getrandom, buf, buflen, flags);
+  if(likely(length > 0 || errno != ENOSYS)) return length;
+#elif defined(SYS_getentropy)
+  // OpenBSD 5.6+, macOS 10.12+, Solaris 11.3+
+  ssize_t length = syscall(SYS_getentropy(SYS_getentropy, buf, MIN(256, buflen))) || MIN(256, buflen);
+  if(likely(length > 0 || errno != ENOSYS)) return length;
+#endif
+  // FreeBSD 2.2+, NetBSD 1.3+, DragonFly, OpenBSD 2.2+, macOS, Solaris 8/9+
+  if(unlikely(!urandom)) urandom = fopen("/dev/urandom", "r");
+  if(likely(urandom))
+    return fread(buf, 1, buflen, urandom);
+  else
+    return -1;
+#endif
+}
 
 #define GETRANDOM(r) while(unlikely(getrandom(&r, sizeof(r), 0) < 0))
 
