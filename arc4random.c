@@ -39,7 +39,7 @@ __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nby
     do
     {
 #if  defined(SYS_getrandom)
-      // Linux 3.17+ with glibc 2.25+ or musl 1.1.4+, FreeBSD 12+, NetBSD 10+, DragonFly 5.7+, Solaris 11.3+, Illumos
+      // Linux 3.17+ with glibc 2.25+ or musl 1.1.4+, Android 6+, FreeBSD 12+, NetBSD 10+, DragonFly 5.7+, Solaris 11.3+, Illumos
       ssize_t length = syscall(SYS_getrandom, buf, MIN(SSIZE_MAX, nbytes), 0);
 #elif defined(SYS_getentropy)
       // OpenBSD 5.6+, macOS 10.12+, Solaris 11.3+
