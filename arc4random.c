@@ -89,12 +89,11 @@ __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nby
   return;
 }
 
-#define GETRANDOM(r) arc4random_buf(&(r), sizeof(r))
 
 __attribute__((visibility("default"))) uint32_t arc4random(void)
 {
   uint32_t out;
-  GETRANDOM(out);
+  arc4random_buf(&out, sizeof(out));
   return out;
 }
 
@@ -103,7 +102,7 @@ __attribute__((visibility("default"))) uint32_t arc4random_uniform(uint32_t uppe
 {
   uint32_t out;
   uint32_t const limit = ~(UINT32_MAX % upper_bound);
-  do GETRANDOM(out);
+  do arc4random_buf(&out, sizeof(out));
   while(unlikely(out > limit));
   return out % upper_bound;
 }
