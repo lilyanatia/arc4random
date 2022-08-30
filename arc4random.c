@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -8,6 +9,7 @@
 #else
 #include <sys/syscall.h>
 #include <stdio.h>
+#include <unistd.h>
 #endif
 #include <sys/types.h>
 
@@ -18,54 +20,62 @@
 #define unlikely(x) __builtin_expect(!!(x), 0)
 #define likely(x)   __builtin_expect(!!(x), 1)
 
-static inline ssize_t getrandom(void *buf, size_t buflen, unsigned int flags)
+__attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nbytes)
 {
-  if(unlikely(buflen > SSIZE_MAX)) buflen = SSIZE_MAX;
 #if defined(_MSC_VER)
   // Windows NT 4.0+
   static bool acquired = false;
   static HCRYPTPROV hCryptProv;
-  if(unlikely(buflen > UINT32_MAX)) buflen = UINT32_MAX;
-  if(unlikely(!acquired)) acquired = !!CryptAcquireContext(&hCryptProv);
-  if(likely(acquired && CryptGenRandom(hCryptProv, buflen, buf))) return buflen;
-  else return -1;
+  if(unlikely(nbytes > UINT32_MAX)) nbytes = UINT32_MAX;
+  if(unlikely(!acquired)) while(unlikely(!CryptAcquireContext(&hCryptProv)));
+  acquired = true;
+  if(likely(acquired && CryptGenRandom(hCryptProv, nbytes, buf))) return nbytes;
+  while(unlikely(!CryptGenRandom(hCryptProv, nbytes, buf)));
+  return nbytes;
 #else
-#if   defined(SYS_getrandom)
-  // Linux 3.17+ with glibc 2.25+ or musl 1.1.4+, FreeBSD 12+, NetBSD 10+, DragonFly 5.7+, Solaris 11.3+, Illumos
-  ssize_t length = syscall(SYS_getrandom, buf, buflen, flags);
-  if(likely(length > 0 || errno != ENOSYS)) return length;
-#elif defined(SYS_getentropy)
-  // OpenBSD 5.6+, macOS 10.12+, Solaris 11.3+
-  ssize_t length = syscall(SYS_getentropy(SYS_getentropy, buf, MIN(256, buflen))) || MIN(256, buflen);
-  if(likely(length > 0 || errno != ENOSYS)) return length;
-#endif
-  // FreeBSD 2.2+, NetBSD 1.3+, DragonFly, OpenBSD 2.2+, macOS, Solaris 8/9+
-  static FILE *urandom;
-  if(unlikely(!urandom)) urandom = fopen("/dev/urandom", "r");
-  if(likely(urandom))
-    return fread(buf, 1, buflen, urandom);
-  else
-    return -1;
-#endif
-}
-
-#define GETRANDOM(r) while(unlikely(getrandom(&r, sizeof(r), 0) < 0))
-
-__attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nbytes)
-{
-  if(likely(nbytes)) do
+  if(likely(nbytes))
   {
-    ssize_t length = MAX(0, getrandom(buf, MIN(SSIZE_MAX, nbytes), 0));
-    buf += length;
-    nbytes -= length;
+#if   defined(SYS_getrandom) || defined(SYS_getentropy)
+    do
+    {
+#if  defined(SYS_getrandom)
+      // Linux 3.17+ with glibc 2.25+ or musl 1.1.4+, FreeBSD 12+, NetBSD 10+, DragonFly 5.7+, Solaris 11.3+, Illumos
+      ssize_t length = syscall(SYS_getrandom, buf, MIN(SSIZE_MAX, nbytes), 0);
+#elif defined(SYS_getentropy)
+      // OpenBSD 5.6+, macOS 10.12+, Solaris 11.3+
+      int length = syscall(SYS_getentropy(SYS_getentropy, buf, MIN(256, nbytes))) || MIN(256, nbytes);
+#endif
+      if(likely(length > 0 || errno != ENOSYS))
+      {
+        buf += length;
+        nbytes -= length;
+      }
+      else goto no_syscall;
+    }
+    while(unlikely(nbytes));
+    return;
+#endif
+    // FreeBSD 2.2+, NetBSD 1.3+, DragonFly, OpenBSD 2.2+, macOS, Solaris 8/9+
+    no_syscall:
+    static FILE *urandom;
+    while(unlikely(!(urandom = fopen("/dev/urandom", "r"))));
+    do
+    {
+      size_t length = fread(buf, 1, nbytes, urandom);
+      buf += length;
+      nbytes -= length;
+    }
+    while(unlikely(nbytes));
   }
-  while(unlikely(nbytes));
+#endif
 }
+
+#define GETRANDOM(r) arc4random_buf(&(r), sizeof(r))
 
 __attribute__((visibility("default"))) uint32_t arc4random(void)
 {
   uint32_t out;
-  GETRANDOM(out)
+  GETRANDOM(out);
   return out;
 }
 
