@@ -10,9 +10,13 @@
 #include <wincrypt.h>
 #else
 #include <sys/syscall.h>
-#include <openssl/rand.h>
-#include <stdio.h>
 #include <unistd.h>
+#ifndef NO_OPENSSL
+#include <openssl/rand.h>
+#endif
+#ifndef NO_URANDOM
+#include <stdio.h>
+#endif
 #endif
 
 #if !defined(__GNUC__) || __GNUC__ < 3
@@ -47,32 +51,34 @@ __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nby
       while(unlikely(!CryptGenRandom(hCryptProv, nbytes, buf)));
     }
 #else
-#if   defined(SYS_getrandom) || defined(SYS_getentropy)
     do
     {
+      int64_t length;
 #if  defined(SYS_getrandom)
       // Linux 3.17+ with glibc 2.25+ or musl 1.1.4+, Android 6+, FreeBSD 12+, NetBSD 10+, DragonFly 5.7+, Solaris 11.3+, Illumos
-      ssize_t length = syscall(SYS_getrandom, buf, MIN(SSIZE_MAX, nbytes), 0);
+      if(unlikely((length = syscall(SYS_getrandom, buf, MIN(SSIZE_MAX, nbytes), 0)) < 0 && errno == ENOSYS))
 #elif defined(SYS_getentropy)
       // OpenBSD 5.6+, macOS 10.12+, Solaris 11.3+
-      int length = syscall(SYS_getentropy(SYS_getentropy, buf, MIN(256, nbytes))) || MIN(256, nbytes);
+      if(unlikely((length = syscall(SYS_getentropy(SYS_getentropy, buf, MIN(256, nbytes))) || MIN(256, nbytes)) < 0 && errno == ENOSYS))
 #endif
-      if(likely(length > 0 || errno != ENOSYS))
+#ifndef NO_OPENSSL
+      // try to use OpenSSL RAND_bytes
+      if(likely(RAND_bytes(buf, nbytes) == 1)) length = nbytes;
+      else
 #endif
       {
-        // try to use OpenSSL RAND_bytes
-        if(unlikely(RAND_bytes(buf, nbytes) != 1))
+#ifndef NO_URANDOM
+        // fall back to /dev/urandom
+        // Android, FreeBSD 2.2+, NetBSD 1.3+, DragonFly, OpenBSD 2.2+, macOS, Solaris 8/9+
+        static FILE *urandom;
+        if(unlikely(!urandom)) urandom = fopen("/dev/urandom", "r");
+        if(likely(urandom))
         {
-          // fall back to /dev/urandom
-          // Android, FreeBSD 2.2+, NetBSD 1.3+, DragonFly, OpenBSD 2.2+, macOS, Solaris 8/9+
-          static FILE *urandom;
-          if(unlikely(!urandom)) urandom = fopen("/dev/urandom", "r");
-          if(likely(urandom))
-          {
-            size_t length = fread(buf, 1, MIN(SIZE_MAX, nbytes), urandom);
-          }
-          else exit(-1); // TODO: figure out something better to do here
+          length = fread(buf, 1, MIN(SIZE_MAX, nbytes), urandom);
         }
+        else
+#endif
+          exit(-1); // TODO: figure out something better to do here
       }
       buf += length;
       nbytes -= length;
