@@ -23,7 +23,7 @@
 __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nbytes)
 {
 #if defined(_MSC_VER)
-  // Windows NT 4.0+
+  // Windows 95+, NT 4.0+
   static bool acquired = false;
   static HCRYPTPROV hCryptProv;
   if(unlikely(nbytes > UINT32_MAX)) nbytes = UINT32_MAX;
