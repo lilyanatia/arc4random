@@ -8,7 +8,7 @@ LIB_PATH := $(PREFIX)/lib
 HEADER_PATH := $(PREFIX)/include
 
 CFLAGS += -fPIC -fvisibility=hidden
-LDFLAGS += -shared
+LDFLAGS += -shared -lcrypto
 
 TARGET := libarc4random.so
 OBJECTS := arc4random.o

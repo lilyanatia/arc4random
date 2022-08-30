@@ -3,15 +3,17 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/param.h>
+#include <sys/types.h>
+
 #ifdef _MSC_VER
 #include <stdbool.h>
 #include <wincrypt.h>
 #else
 #include <sys/syscall.h>
+#include <openssl/rand.h>
 #include <stdio.h>
 #include <unistd.h>
 #endif
-#include <sys/types.h>
 
 #if !defined(__GNUC__) || __GNUC__ < 3
 #define __builtin_expect(x, v) (x)
@@ -22,19 +24,29 @@
 
 __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nbytes)
 {
-#if defined(_MSC_VER)
-  // Windows 95+, NT 4.0+
-  static bool acquired = false;
-  static HCRYPTPROV hCryptProv;
-  if(unlikely(nbytes > UINT32_MAX)) nbytes = UINT32_MAX;
-  if(unlikely(!acquired)) while(unlikely(!CryptAcquireContext(&hCryptProv)));
-  acquired = true;
-  if(likely(acquired && CryptGenRandom(hCryptProv, nbytes, buf))) return nbytes;
-  while(unlikely(!CryptGenRandom(hCryptProv, nbytes, buf)));
-  return nbytes;
-#else
   if(likely(nbytes))
   {
+#if defined(_MSC_VER)
+    // Windows 95+, NT 4.0+
+    // try RtlGenRandom first
+    HMODULE advapi = GetModuleHandle("advapi32.dll");
+    BOOLEAN (APIENTRY *RtlGenRandom)(void *, ULONG);
+    if(advapi) RtlGenRandom = (BOOLEAN (APIENTRY *)(void *, ULONG))GetProcAddress(advapi, "SystemFunction036");
+    if(RtlGenRandom)
+    {
+      while(unlikely(!RtlGenRandom(buf, nbytes)));
+    }
+    else
+    {
+      // fall back to CryptGenRandom
+      static bool acquired = false;
+      static HCRYPTPROV hCryptProv;
+      if(unlikely(nbytes > UINT32_MAX)) nbytes = UINT32_MAX;
+      if(unlikely(!acquired)) while(unlikely(!CryptAcquireContext(&hCryptProv)));
+      acquired = true;
+      while(unlikely(!CryptGenRandom(hCryptProv, nbytes, buf)));
+    }
+#else
 #if   defined(SYS_getrandom) || defined(SYS_getentropy)
     do
     {
@@ -46,28 +58,29 @@ __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nby
       int length = syscall(SYS_getentropy(SYS_getentropy, buf, MIN(256, nbytes))) || MIN(256, nbytes);
 #endif
       if(likely(length > 0 || errno != ENOSYS))
-      {
-        buf += length;
-        nbytes -= length;
-      }
-      else goto no_syscall;
-    }
-    while(unlikely(nbytes));
-    return;
 #endif
-    // FreeBSD 2.2+, NetBSD 1.3+, DragonFly, OpenBSD 2.2+, macOS, Solaris 8/9+
-    no_syscall:
-    static FILE *urandom;
-    while(unlikely(!(urandom = fopen("/dev/urandom", "r"))));
-    do
-    {
-      size_t length = fread(buf, 1, nbytes, urandom);
+      {
+        // try to use OpenSSL RAND_bytes
+        if(unlikely(RAND_bytes(buf, nbytes) != 1))
+        {
+          // fall back to /dev/urandom
+          // Android, FreeBSD 2.2+, NetBSD 1.3+, DragonFly, OpenBSD 2.2+, macOS, Solaris 8/9+
+          static FILE *urandom;
+          if(unlikely(!urandom)) urandom = fopen("/dev/urandom", "r");
+          if(likely(urandom))
+          {
+            size_t length = fread(buf, 1, MIN(SIZE_MAX, nbytes), urandom);
+          }
+          else exit(-1); // TODO: figure out something better to do here
+        }
+      }
       buf += length;
       nbytes -= length;
     }
     while(unlikely(nbytes));
-  }
 #endif
+  }
+  return;
 }
 
 #define GETRANDOM(r) arc4random_buf(&(r), sizeof(r))
