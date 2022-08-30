@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <sys/param.h>
 #ifdef _MSC_VER
+#include <stdbool.h>
 #include <wincrypt.h>
 #else
 #include <sys/syscall.h>
@@ -17,20 +18,16 @@
 #define unlikely(x) __builtin_expect(!!(x), 0)
 #define likely(x)   __builtin_expect(!!(x), 1)
 
-#ifndef _MSC_VER
-static FILE *urandom;
-#endif
-
 static inline ssize_t getrandom(void *buf, size_t buflen, unsigned int flags)
 {
   if(unlikely(buflen > SSIZE_MAX)) buflen = SSIZE_MAX;
 #if defined(_MSC_VER)
   // Windows NT 4.0+
+  static bool acquired = false;
+  static HCRYPTPROV hCryptProv;
   if(unlikely(buflen > UINT32_MAX)) buflen = UINT32_MAX;
-  HCRYPTPROV hCryptProv;
-  if(likely(CryptAcquireContext(&hCryptProv, NULL, (LPCWSTR)L"Microsoft Base Cryptographic Provider v1.0", PROV_RSA_FULL, CRYPT_VERIFYCONTEXT) &&
-            CryptGenRandom(hCryptProv, buflen, buf)))
-    return buflen;
+  if(unlikely(!acquired)) acquired = !!CryptAcquireContext(&hCryptProv);
+  if(likely(acquired && CryptGenRandom(hCryptProv, buflen, buf))) return buflen;
   else return -1;
 #else
 #if   defined(SYS_getrandom)
@@ -43,6 +40,7 @@ static inline ssize_t getrandom(void *buf, size_t buflen, unsigned int flags)
   if(likely(length > 0 || errno != ENOSYS)) return length;
 #endif
   // FreeBSD 2.2+, NetBSD 1.3+, DragonFly, OpenBSD 2.2+, macOS, Solaris 8/9+
+  static FILE *urandom;
   if(unlikely(!urandom)) urandom = fopen("/dev/urandom", "r");
   if(likely(urandom))
     return fread(buf, 1, buflen, urandom);
