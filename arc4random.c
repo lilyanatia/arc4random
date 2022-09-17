@@ -53,7 +53,7 @@ __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nby
 #else
     do
     {
-      int64_t length;
+      int64_t length = 0;
 #if  defined(SYS_getrandom)
       // Linux 3.17+ with glibc 2.25+ or musl 1.1.4+, Android 6+, FreeBSD 12+, NetBSD 10+, DragonFly 5.7+, Solaris 11.3+, Illumos
       if(unlikely((length = syscall(SYS_getrandom, buf, MIN(SSIZE_MAX, nbytes), 0)) < 0 && errno == ENOSYS))
@@ -76,9 +76,7 @@ __attribute__((visibility("default"))) void arc4random_buf(void *buf, size_t nby
         {
           length = fread(buf, 1, MIN(SIZE_MAX, nbytes), urandom);
         }
-        else
 #endif
-          exit(-1); // TODO: figure out something better to do here
       }
       buf += length;
       nbytes -= length;

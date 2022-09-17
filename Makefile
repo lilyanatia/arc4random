@@ -1,6 +1,6 @@
 CC ?= gcc
 ARCH ?= $(shell uname -m)
-CFLAGS ?= -march=native -O2 -fstack-protector-strong -fno-plt -fstack-clash-protection -mharden-sls=all
+CFLAGS ?= -march=native -O2 -fstack-protector-strong -fno-plt -fstack-clash-protection -mharden-sls=all -falign-functions=32
 LDFLAGS ?= -s -Wl,-O1,--sort-common,--as-needed,-z,relro,-z,now,-z,noexecstack
 
 PREFIX ?= /usr
